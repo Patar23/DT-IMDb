@@ -72,8 +72,7 @@ V prípade nekonzistentných záznamov bol použitý parameter `ON_ERROR = 'CONT
 ---
 ### **3.1 Transfor (Transformácia dát)**
 
-3.1 Transformácia dát
-V tejto fáze boli dáta zo staging tabuliek vyčistené, transformované a pripravené na analýzu. Hlavným cieľom bolo vytvoriť dimenzionálne tabuľky, ktoré poskytujú bohatý kontext pre faktovú tabuľku, a zároveň umožniť efektívnu analýzu filmov a ich vlastností.
+V tejto fáze prebehlo čistenie, transformácia a obohatenie dát zo staging tabuliek. Cieľom bolo pripraviť dimenzionálne tabuľky a faktovú tabuľku, ktoré zabezpečia efektívnu a jednoduchú analýzu.
 
 Dimenzia `dim_movies` obsahuje základné informácie o filmoch, ako sú názov, rok natočenia, dátum vydania, dĺžka filmu, krajina pôvodu, jazyky a produkčná spoločnosť. Tieto údaje sú nevyhnutné pre analýzu filmov z rôznych aspektov.
 ```sql
@@ -169,4 +168,86 @@ DROP TABLE IF EXISTS role_mapping_staging;
 ETL proces v Snowflake umožnil spracovanie pôvodných dát z `.csv` formátu do viacdimenzionálneho modelu typu hviezda. Tento proces zahŕňal čistenie, obohacovanie a reorganizáciu údajov. Výsledný model umožňuje analýzu čitateľských preferencií a správania používateľov, pričom poskytuje základ pre vizualizácie a reporty.
 
 ---
+## **4 Vizualizácia dát**
 
+Dashboard obsahuje `6 vizualizácií`, ktoré poskytujú prehľad o kľúčových metrikách a trendoch týkajúcich sa filmov, režisérov, žánrov a hodnotení. Tieto vizualizácie zodpovedajú dôležité otázky a umožňujú lepšie pochopiť preferencie divákov a vzorce ich správania pri hodnotení filmov.
+
+<p align="center">
+  <img src="https://github.com/Patar23/DT-IMDb/blob/main/IMDb_dashboard.png" alt="dashboard">
+  <br>
+  <em>Obrázok 3 Dashboard IMDb datasetu</em>
+</p>
+
+---
+### **Graf 1: Priemerné hodnotenie filmov podľa žánru**
+Popis grafu: Tento bar chart zobrazuje priemerné hodnotenie filmov rozdelených podľa žánrov. Umožňuje analyzovať, ktoré žánre majú najlepšie priemerné hodnotenie, čo môže byť indikátorom kvality filmov v danom žánri a preferencií divákov v súvislosti s hodnotením filmov.
+
+```sql
+SELECT g.GENRE_NAME, AVG(f.AVG_RATING) AS AVERAGE_RATING
+FROM FACT_MOVIES f
+JOIN DIM_GENRES g ON f.GENRE_ID = g.DIM_GENREID
+GROUP BY g.GENRE_NAME
+ORDER BY AVERAGE_RATING DESC;
+```
+---
+### **Graf 2: Počet filmov v databáze**
+Popis grafu: Tento scorecard ukazuje celkový počet filmov v databáze IMDb. Tento údaj poskytuje základný prehľad o množstve filmov zahrnutých v databáze a je užitočný pri hodnotení rozsahu dát v rámci projektu alebo analýzy.
+
+```sql
+SELECT COUNT(f.FACT_MOVIE_ID) AS MOVIE_COUNT
+FROM FACT_MOVIES f;
+
+```
+---
+### **Graf 3: Počet filmov podľa žánru v priebehu rokov**
+Popis grafu: Tento line chart zobrazuje vývoj počtu filmov v jednotlivých žánroch v priebehu rokov. Pomáha pochopiť, ktoré žánre získali na popularite v rôznych obdobiach a umožňuje vidieť trend v produkcii filmov podľa žánrov v čase.
+
+```sql
+SELECT m.YEAR, g.GENRE_NAME, COUNT(f.FACT_MOVIE_ID) AS MOVIE_COUNT
+FROM FACT_MOVIES f
+JOIN DIM_MOVIES m ON f.MOVIE_ID = m.DIM_MOVIEID
+JOIN DIM_GENRES g ON f.GENRE_ID = g.DIM_GENREID
+GROUP BY m.YEAR, g.GENRE_NAME
+ORDER BY m.YEAR, MOVIE_COUNT DESC;
+```
+---
+### **Počet filmov podľa režiséra a žánru**
+Popis grafu: Tento heatgrid chart zobrazuje počet filmov podľa jednotlivých režisérov a ich žánrov. Pomáha identifikovať, ktorí režiséri sa najviac zameriavajú na konkrétne žánre, a poskytuje prehľad o výbere žánrov v rámci režisérskej tvorby.
+
+```sql
+SELECT d.NAME AS DIRECTOR_NAME, g.GENRE_NAME, COUNT(f.FACT_MOVIE_ID) AS MOVIE_COUNT
+FROM FACT_MOVIES f
+JOIN DIM_DIRECTORS d ON f.DIRECTOR_ID = d.DIRECTOR_ID
+JOIN DIM_GENRES g ON f.GENRE_ID = g.DIM_GENREID
+GROUP BY d.NAME, g.GENRE_NAME
+ORDER BY MOVIE_COUNT DESC;
+```
+---
+### **Graf 5: Top 5 filmov s najvyšším počtom hlasov**
+Popis grafu: Tento bar chart zobrazuje top 5 filmov s najvyšším počtom hlasov v databáze IMDb. Umožňuje rýchly prehľad o tom, ktoré filmy získali najväčšiu popularitu medzi divákmi a ktoré filmy majú najväčšiu základňu hlasujúcich divákov.
+
+```sql
+SELECT m.TITLE, SUM(f.TOTAL_VOTES) AS TOTAL_VOTES
+FROM FACT_MOVIES f
+JOIN DIM_MOVIES m ON f.MOVIE_ID = m.DIM_MOVIEID
+GROUP BY m.TITLE
+ORDER BY TOTAL_VOTES DESC
+LIMIT 5;
+```
+---
+### **Graf 6: Výška hercov vs. Počet filmov, v ktorých sa objavili**
+Popis grafu: Tento scatter chart zobrazuje vzťah medzi výškou hercov a počtom filmov, v ktorých sa objavili. Pomáha analyzovať, či existuje nejaký vzor alebo väzba medzi fyzickými vlastnosťami hercov (ako je výška) a ich početnosťou v databáze filmov.
+
+```sql
+SELECT n.HEIGHT, COUNT(f.FACT_MOVIE_ID) AS MOVIE_COUNT
+FROM FACT_MOVIES f
+JOIN DIM_NAMES n ON f.NAME_ID = n.DIM_NAMEID
+GROUP BY n.HEIGHT
+ORDER BY n.HEIGHT;
+```
+
+Dashboard poskytuje podrobný prehľad o dátach v databáze filmov, pričom odpovedá na kľúčové otázky týkajúce sa preferencií divákov a trendov v oblasti filmového priemyslu. Vizualizácie umožňujú efektívnu analýzu a interpretáciu týchto dát, čo môže pomôcť pri vylepšovaní odporúčacích systémov, marketingových kampaní a správy filmových knižníc.
+
+---
+
+**Autor:** Patrik Vereš
